@@ -2,12 +2,16 @@ package handler
 
 import (
 	"context"
+	"database/sql"
+	"dreampicai/db"
 	"dreampicai/pkg/sb"
 	"dreampicai/types"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 )
 
@@ -33,6 +37,7 @@ func WithUser(next http.Handler) http.Handler {
 		}
 
 		user := types.AuthenticatedUser{
+			ID:       uuid.MustParse(resp.ID),
 			Email:    resp.Email,
 			LoggedIn: true,
 		}
@@ -55,6 +60,28 @@ func WithAuth(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
+}
+
+func WithAccountSetup(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		user := GetAuthenticatedUser(r)
+		account, err := db.GetAccountByUserID(user.ID)
+
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				// user has not setup account, redirect to account esetup
+				http.Redirect(w, r, "/account/setup", http.StatusSeeOther)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		user.Account = account
+		ctx := context.WithValue(r.Context(), types.UserContextKey, user)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 	return http.HandlerFunc(fn)
 }

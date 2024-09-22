@@ -1,6 +1,7 @@
 package main
 
 import (
+	"dreampicai/db"
 	"dreampicai/handler"
 	"dreampicai/pkg/sb"
 	"embed"
@@ -26,7 +27,6 @@ func main() {
 	router.Use(handler.WithUser)
 
 	router.Handle("/*", http.StripPrefix("/", http.FileServer(http.FS(FS))))
-	router.Get("/", handler.Make(handler.HandleHomeIndex))
 
 	router.Get("/login", handler.Make(handler.HandleLogInIndex))
 	router.Get("/login/provider/google", handler.Make(handler.HandleLoginWithGoogle))
@@ -36,9 +36,13 @@ func main() {
 	router.Post("/login", handler.Make(handler.HandleLoginCreate))
 	router.Post("/signup", handler.Make(handler.HandleSignupCreate))
 	router.Get("/auth/callback", handler.Make(handler.HandleAuthCallback))
+	router.Get("/account/setup", handler.Make(handler.HandleAccountSetupIndex))
+
+	router.Post("/account/create", handler.Make(handler.HandleAccountSetupCreate))
 
 	router.Group(func(auth chi.Router) {
-		auth.Use(handler.WithAuth)
+		auth.Use(handler.WithAccountSetup)
+		auth.Get("/", handler.Make(handler.HandleHomeIndex))
 		auth.Get("/settings", handler.Make(handler.HandleSettingsIndex))
 	})
 
@@ -51,6 +55,9 @@ func main() {
 
 func initEverything() error {
 	if err := godotenv.Load(); err != nil {
+		return err
+	}
+	if err := db.Init(); err != nil {
 		return err
 	}
 	return sb.Init()
